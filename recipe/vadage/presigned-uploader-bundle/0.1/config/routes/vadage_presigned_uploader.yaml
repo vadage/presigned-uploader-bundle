@@ -1,0 +1,3 @@
+vadage_presigned_uploader:
+    resource: '@VadagePresignedUploaderBundle/config/routes.php'
+    prefix: /uploads

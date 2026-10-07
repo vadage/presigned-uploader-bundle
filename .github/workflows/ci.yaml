@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+      - run: composer validate --strict
+      - run: vendor/bin/php-cs-fixer fix --dry-run --diff
+      - run: vendor/bin/rector process --dry-run
+      - run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+  tests:
+    name: tests (PHP ${{ matrix.php }}, ${{ matrix.dependencies }}${{ matrix.symfony && format(', Symfony {0}', matrix.symfony) || '' }}, ${{ matrix.database }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Oldest supported versions of everything: Symfony 7.4, PHP 8.2.
+          - { php: '8.2', dependencies: lowest, database: sqlite }
+          - { php: '8.2', dependencies: highest, database: sqlite }
+          - { php: '8.4', dependencies: highest, database: sqlite, symfony: '7.4.*' }
+          - { php: '8.4', dependencies: highest, database: mysql }
+          - { php: '8.4', dependencies: highest, database: postgres }
+          - { php: '8.5', dependencies: highest, database: sqlite }
+    env:
+      DATABASE_URL: ${{ matrix.database == 'mysql' && 'mysql://test:test@127.0.0.1:3307/test?serverVersion=9.7' || matrix.database == 'postgres' && 'postgresql://test:test@127.0.0.1:5433/test?serverVersion=18' || '' }}
+      # Read by symfony/flex: limits symfony/* packages to this version.
+      SYMFONY_REQUIRE: ${{ matrix.symfony }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The databases come from compose.yaml too, so Dependabot keeps a single copy of each image digest current.
+      - run: docker compose up -d --wait seaweedfs ${{ matrix.database != 'sqlite' && matrix.database || '' }}
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_sqlite, pdo_mysql, pdo_pgsql, fileinfo
+          coverage: none
+          tools: ${{ matrix.symfony && 'flex' || '' }}
+      - uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
+        with:
+          dependency-versions: ${{ matrix.dependencies }}
+          # FrameworkBundle before 7.4.19 / 8.1.7 rejects the explicit "remote-event" option the test kernel needs
+          # (it is a dev dependency here, so not enabled automatically). Applications are not affected.
+          composer-options: ${{ matrix.dependencies == 'lowest' && '--with=symfony/framework-bundle:^7.4.19' || '' }}
+      - run: vendor/bin/phpunit
+
+  javascript:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: assets
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: assets/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Compiled files match the sources
+        run: npm run build && git diff --exit-code -- dist types

@@ -1,0 +1,8 @@
+/vendor/
+/composer.lock
+/.php-cs-fixer.cache
+/.phpunit.cache/
+/phpunit.xml
+/phpstan.neon
+/.idea/
+/tests/App/config/reference.php

@@ -1,0 +1,13 @@
+  * Pending uploads are stored with Doctrine by default:
+    <fg=blue;options=bold>composer require doctrine/orm doctrine/doctrine-bundle</>
+    then create the tables with a migration (<fg=blue;options=bold>php bin/console doctrine:migrations:diff</>)
+
+  * Configure an S3 client (e.g. <fg=blue;options=bold>composer require async-aws/async-aws-bundle</>)
+    and your storages in <fg=green>config/packages/vadage_presigned_uploader.yaml</>
+
+  * Map properties with <fg=green>#[Uploadable]</>, <fg=green>#[UploadableField]</> and <fg=green>#[PresignedFile]</>,
+    add a CORS rule for PUT requests to your buckets, and run
+    <fg=blue;options=bold>php bin/console vadage:presigned-uploader:cleanup</> every few minutes
+
+  * Read the documentation at
+    <fg=blue>https://github.com/vadage/presigned-uploader-bundle/blob/main/docs/index.md</>

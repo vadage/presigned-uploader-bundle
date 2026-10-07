@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+    <file source-language="en" target-language="fr" datatype="plaintext" original="file.ext">
+        <body>
+            <trans-unit id="presigned_file.too_large">
+                <source>The file is too large ({{ size }} {{ suffix }}). Allowed maximum size is {{ limit }} {{ suffix }}.</source>
+                <target>Le fichier est trop volumineux ({{ size }} {{ suffix }}). Sa taille ne doit pas dépasser {{ limit }} {{ suffix }}.</target>
+            </trans-unit>
+            <trans-unit id="presigned_file.empty">
+                <source>An empty file is not allowed.</source>
+                <target>Un fichier vide n'est pas autorisé.</target>
+            </trans-unit>
+            <trans-unit id="presigned_file.mime_type">
+                <source>The mime type of the file is invalid ({{ type }}). Allowed mime types are {{ types }}.</source>
+                <target>Le type du fichier est invalide ({{ type }}). Les types autorisés sont {{ types }}.</target>
+            </trans-unit>
+            <trans-unit id="presigned_file.extension">
+                <source>The extension of the file is invalid ({{ extension }}). Allowed extensions are {{ extensions }}.</source>
+                <target>L'extension du fichier est invalide ({{ extension }}). Les extensions autorisées sont {{ extensions }}.</target>
+            </trans-unit>
+            <trans-unit id="descriptor.filename">
+                <source>The file name is invalid.</source>
+                <target>Le nom du fichier est invalide.</target>
+            </trans-unit>
+            <trans-unit id="descriptor.size">
+                <source>The file size is invalid.</source>
+                <target>La taille du fichier est invalide.</target>
+            </trans-unit>
+            <trans-unit id="descriptor.too_large">
+                <source>The file is too large.</source>
+                <target>Le fichier est trop volumineux.</target>
+            </trans-unit>
+            <trans-unit id="descriptor.mime_type">
+                <source>The mime type is invalid.</source>
+                <target>Le type du fichier est invalide.</target>
+            </trans-unit>
+            <trans-unit id="descriptor.sha256">
+                <source>A base64 encoded SHA-256 checksum is required.</source>
+                <target>Une somme de contrôle SHA-256 encodée en base64 est requise.</target>
+            </trans-unit>
+            <trans-unit id="stored.size">
+                <source>The stored file size does not match the announced size.</source>
+                <target>La taille du fichier enregistré ne correspond pas à la taille annoncée.</target>
+            </trans-unit>
+            <trans-unit id="stored.content_type">
+                <source>The stored content type does not match the announced content type.</source>
+                <target>Le type du fichier enregistré ne correspond pas au type annoncé.</target>
+            </trans-unit>
+            <trans-unit id="stored.checksum">
+                <source>The stored checksum does not match the announced checksum.</source>
+                <target>La somme de contrôle du fichier enregistré ne correspond pas à celle annoncée.</target>
+            </trans-unit>
+            <trans-unit id="form.invalid">
+                <source>The uploaded file is no longer available, please upload it again.</source>
+                <target>Le fichier téléversé n'est plus disponible, veuillez le téléverser à nouveau.</target>
+            </trans-unit>
+        </body>
+    </file>
+</xliff>

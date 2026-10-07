@@ -1,0 +1,19 @@
+# See https://github.com/vadage/presigned-uploader-bundle/blob/main/docs/index.md
+vadage_presigned_uploader:
+    # Named storages, referenced by #[UploadableField(storage: '...')]
+    storages: {}
+        # documents:
+        #     client: async_aws.client.r2        # an AsyncAws\S3\S3Client service, e.g. from async-aws/async-aws-bundle
+        #     bucket: documents
+        # media:
+        #     client: async_aws.client.r2
+        #     bucket: media
+        #     public_url: 'https://media.example.com'
+        #     staging:                           # upload to a private storage first, promote on claim
+        #         storage: quarantine
+        # quarantine:
+        #     client: async_aws.client.r2
+        #     bucket: quarantine
+
+    # defaults:
+    #     max_size: 50M                          # for mappings without #[PresignedFile(maxSize: ...)]

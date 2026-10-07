@@ -1,0 +1,37 @@
+{%- block vadage_presigned_upload_widget -%}
+    {%- set controller = stimulus_controller -%}
+    <div {{ block('widget_container_attributes') }}
+        data-controller="{{ controller }}"
+        data-{{ controller }}-presign-url-value="{{ presign_url }}"
+        {% if csrf_token %}data-{{ controller }}-csrf-header-value="{{ csrf_header }}" data-{{ controller }}-csrf-token-value="{{ csrf_token }}"{% endif %}
+        {% if max_size %}data-{{ controller }}-max-size-value="{{ max_size }}"{% endif %}
+        data-{{ controller }}-checksum-value="{{ checksum ? 'true' : 'false' }}"
+        data-{{ controller }}-busy-message-value="{{ 'Please wait until the upload has finished.'|trans({}, translation_domain_ui) }}"
+        data-{{ controller }}-too-large-message-value="{{ 'The file is too large. Allowed maximum size is {{ limit }}.'|trans({}, translation_domain_ui) }}"
+        data-{{ controller }}-failed-message-value="{{ 'The upload failed, please try again.'|trans({}, translation_domain_ui) }}"
+    >
+        {%- if stored_object -%}
+            <div class="presigned-upload-current">
+                {%- if download_url -%}
+                    <a href="{{ download_url }}" target="_blank" rel="noopener">{{ stored_object.originalName }}</a>
+                {%- else -%}
+                    {{ stored_object.originalName }}
+                {%- endif -%}
+            </div>
+        {%- endif -%}
+
+        <input type="file" id="{{ id }}_file"{% if accept %} accept="{{ accept }}"{% endif %}
+            data-{{ controller }}-target="file" data-action="change->{{ controller }}#upload"
+            {%- if disabled %} disabled{% endif %}>
+
+        <progress max="100" value="0" hidden data-{{ controller }}-target="progress"></progress>
+        <div class="presigned-upload-errors" role="alert" data-{{ controller }}-target="errors"></div>
+
+        {{- form_widget(form.token, {attr: {('data-' ~ controller ~ '-target'): 'token'}}) -}}
+        {%- if form.delete is defined and stored_object -%}
+            {{- form_row(form.delete) -}}
+        {%- elseif form.delete is defined -%}
+            {%- do form.delete.setRendered() -%}
+        {%- endif -%}
+    </div>
+{%- endblock -%}

@@ -1,0 +1,130 @@
+{
+    "name": "vadage/presigned-uploader-bundle",
+    "description": "Presigned direct-to-storage uploads for Symfony, with entity mapping, validation and webhooks",
+    "type": "symfony-bundle",
+    "keywords": [
+        "symfony-ux",
+        "symfony-bundle",
+        "upload",
+        "presigned-url",
+        "s3",
+        "r2"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "vadage"
+        }
+    ],
+    "require": {
+        "php": ">=8.2",
+        "ext-fileinfo": "*",
+        "async-aws/core": "^1.27",
+        "async-aws/s3": "^3.5",
+        "psr/clock": "^1.0",
+        "psr/container": "^2.0",
+        "psr/log": "^3.0",
+        "symfony/clock": "^7.4 || ^8.0",
+        "symfony/config": "^7.4 || ^8.0",
+        "symfony/dependency-injection": "^7.4 || ^8.0",
+        "symfony/event-dispatcher-contracts": "^3.6",
+        "symfony/framework-bundle": "^7.4 || ^8.0",
+        "symfony/http-foundation": "^7.4 || ^8.0",
+        "symfony/http-kernel": "^7.4 || ^8.0",
+        "symfony/mime": "^7.4 || ^8.0",
+        "symfony/routing": "^7.4 || ^8.0",
+        "symfony/uid": "^7.4 || ^8.0",
+        "symfony/validator": "^7.4 || ^8.0"
+    },
+    "require-dev": {
+        "api-platform/doctrine-orm": "^4.4 || ^5.0",
+        "api-platform/graphql": "^4.4 || ^5.0",
+        "api-platform/symfony": "^4.4 || ^5.0",
+        "doctrine/dbal": "^4.3",
+        "doctrine/doctrine-bundle": "^2.13 || ^3.0",
+        "doctrine/orm": "^3.3",
+        "doctrine/persistence": "^3.1 || ^4.0",
+        "friendsofphp/php-cs-fixer": "^3.95",
+        "league/flysystem": "^3.29",
+        "league/flysystem-memory": "^3.29",
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan": "^2.3",
+        "phpstan/phpstan-doctrine": "^2.0",
+        "phpstan/phpstan-phpunit": "^2.1",
+        "phpstan/phpstan-strict-rules": "^2.1",
+        "phpstan/phpstan-symfony": "^2.1",
+        "phpunit/phpunit": "^11.5 || ^12.4 || ^13.4",
+        "rector/rector": "^2.7",
+        "symfony/browser-kit": "^7.4 || ^8.0",
+        "symfony/console": "^7.4 || ^8.0",
+        "symfony/css-selector": "^7.4 || ^8.0",
+        "symfony/form": "^7.4 || ^8.0",
+        "symfony/http-client": "^7.4 || ^8.0",
+        "symfony/messenger": "^7.4 || ^8.0",
+        "symfony/options-resolver": "^7.4 || ^8.0",
+        "symfony/property-access": "^7.4 || ^8.0",
+        "symfony/remote-event": "^7.4 || ^8.0",
+        "symfony/security-core": "^7.4 || ^8.0",
+        "symfony/security-csrf": "^7.4 || ^8.0",
+        "symfony/serializer": "^7.4 || ^8.0",
+        "symfony/translation": "^7.4 || ^8.0",
+        "symfony/twig-bundle": "^7.4 || ^8.0",
+        "symfony/webhook": "^7.4 || ^8.0"
+    },
+    "conflict": {
+        "api-platform/core": "<4.4",
+        "api-platform/json-schema": "<4.4",
+        "api-platform/metadata": "<4.4",
+        "doctrine/dbal": "<4.3",
+        "doctrine/doctrine-bundle": "<2.13",
+        "doctrine/orm": "<3.3",
+        "league/flysystem": "<3.29",
+        "symfony/console": "<7.4",
+        "symfony/form": "<7.4",
+        "symfony/messenger": "<7.4",
+        "symfony/remote-event": "<7.4",
+        "symfony/security-core": "<7.4",
+        "symfony/security-csrf": "<7.4",
+        "symfony/serializer": "<7.4",
+        "symfony/translation": "<7.4",
+        "symfony/twig-bundle": "<7.4",
+        "symfony/webhook": "<7.4"
+    },
+    "suggest": {
+        "async-aws/async-aws-bundle": "To configure the S3 clients",
+        "doctrine/doctrine-bundle": "To store pending uploads and map StoredObject columns (with doctrine/orm)",
+        "league/flysystem-bundle": "To read, write and delete objects through Flysystem, and to promote uploads into non-S3 storages",
+        "symfony/console": "For the cleanup command",
+        "symfony/form": "For PresignedUploadType",
+        "symfony/security-csrf": "To require CSRF tokens on the upload endpoints",
+        "symfony/serializer": "To read and write StoredObject properties in APIs, e.g. with API Platform",
+        "symfony/stimulus-bundle": "For the upload Stimulus controller",
+        "symfony/translation": "To translate validation and widget messages (English, German and French are included)",
+        "symfony/twig-bundle": "To render the upload form widget",
+        "symfony/webhook": "To receive storage event notifications (with symfony/remote-event and symfony/messenger)"
+    },
+    "autoload": {
+        "psr-4": {
+            "Vadage\\PresignedUploaderBundle\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Vadage\\PresignedUploaderBundle\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "phpstan/extension-installer": true
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "phpstan": "phpstan analyse --memory-limit=1G",
+        "cs": "php-cs-fixer fix --dry-run --diff",
+        "cs-fix": "php-cs-fixer fix",
+        "rector": "rector process --dry-run",
+        "rector-fix": "rector process"
+    }
+}
