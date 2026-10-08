@@ -57,6 +57,7 @@ return static function (ContainerConfigurator $container): void {
             param('vadage_presigned_uploader.claim_ttl'),
             service('logger')->ignoreOnInvalid(),
             service('translator')->nullOnInvalid(),
+            service('security.authorization_checker')->nullOnInvalid(),
         ])
         ->tag('monolog.logger', ['channel' => 'presigned_uploader'])
         ->alias(UploadManager::class, 'vadage_presigned_uploader.upload_manager');
@@ -89,6 +90,7 @@ return static function (ContainerConfigurator $container): void {
             service('clock'),
             service('logger')->ignoreOnInvalid(),
             service('translator')->nullOnInvalid(),
+            service('security.authorization_checker')->nullOnInvalid(),
         ])
         ->tag('monolog.logger', ['channel' => 'presigned_uploader'])
         ->alias(UploadVerifier::class, 'vadage_presigned_uploader.verifier');

@@ -9,7 +9,9 @@ use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
+use Symfony\Component\DependencyInjection\Exception\LogicException;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\ExpressionLanguage\Expression;
 use Vadage\PresignedUploaderBundle\Attribute\Uploadable;
 use Vadage\PresignedUploaderBundle\Attribute\UploadableField;
 use Vadage\PresignedUploaderBundle\Mapping\StagingConfig;
@@ -70,31 +72,37 @@ final class MappingPass implements CompilerPassInterface
                         throw new InvalidArgumentException(\sprintf('%s: storage "%s" has no staging configured.', $context, $field->storage));
                     }
                     $namer = $field->namer ?? TypedArray::string($defaults, 'namer');
-                    $services[NamerInterface::class][$namer] = $this->service($container, $namer, NamerInterface::class, $context);
-
-                    $stagingConfig = false === $field->staging ? null : $staging[$field->storage];
                     $uploadTtl = $field->uploadTtl ?? TypedArray::int($defaults, 'upload_ttl');
-                    $claimTtl = TypedArray::int($defaults, 'claim_ttl');
-                    // Expired uploads are deleted once; a presigned PUT outliving them would recreate an untracked object.
-                    if ($uploadTtl < 1 || $uploadTtl > VadagePresignedUploaderBundle::MAX_UPLOAD_TTL || $uploadTtl >= $claimTtl) {
-                        throw new InvalidArgumentException(\sprintf('%s: uploadTtl must be between 1 and %d seconds and shorter than "defaults.claim_ttl" (%d).', $context, VadagePresignedUploaderBundle::MAX_UPLOAD_TTL, $claimTtl));
-                    }
-                    // Without "If-None-Match", the presigned URL can overwrite the verified object until it expires.
-                    $uploadStorage = $stagingConfig?->getArgument(0) ?? $field->storage;
-                    \assert(\is_string($uploadStorage));
-                    if (null === TypedArray::nullableString($storages[$uploadStorage], 'client')) {
-                        throw new InvalidArgumentException(\sprintf('%s: storage "%s" has no "client", it cannot receive uploads. Configure one, or stage uploads in a storage that has.', $context, $uploadStorage));
-                    }
-                    if (null !== $stagingConfig) {
-                        $promoter = $stagingConfig->getArgument(2);
-                        \assert(\is_string($promoter));
-                        $services[PromoterInterface::class][$promoter] = $this->service($container, $promoter, PromoterInterface::class, $context);
-                    }
-                    if (!$field->checksum && !TypedArray::bool($storages[$uploadStorage], 'conditional_put')) {
-                        throw new InvalidArgumentException(\sprintf('%s: storage "%s" has "conditional_put" disabled, which requires "checksum: true".', $context, $uploadStorage));
-                    }
+                    $stagingConfig = $maxSize = null;
+                    if ($field->uploads) {
+                        $services[NamerInterface::class][$namer] = $this->service($container, $namer, NamerInterface::class, $context);
 
-                    $maxSize = $this->maxSize($defaults, $property, $context);
+                        $stagingConfig = false === $field->staging ? null : $staging[$field->storage];
+                        $claimTtl = TypedArray::int($defaults, 'claim_ttl');
+                        // Expired uploads are deleted once; a presigned PUT outliving them would recreate an untracked object.
+                        if ($uploadTtl < 1 || $uploadTtl > VadagePresignedUploaderBundle::MAX_UPLOAD_TTL || $uploadTtl >= $claimTtl) {
+                            throw new InvalidArgumentException(\sprintf('%s: uploadTtl must be between 1 and %d seconds and shorter than "defaults.claim_ttl" (%d).', $context, VadagePresignedUploaderBundle::MAX_UPLOAD_TTL, $claimTtl));
+                        }
+                        // Without "If-None-Match", the presigned URL can overwrite the verified object until it expires.
+                        $uploadStorage = $stagingConfig?->getArgument(0) ?? $field->storage;
+                        \assert(\is_string($uploadStorage));
+                        if (null === TypedArray::nullableString($storages[$uploadStorage], 'client')) {
+                            throw new InvalidArgumentException(\sprintf('%s: storage "%s" has no "client", it cannot receive uploads. Configure one, or stage uploads in a storage that has.', $context, $uploadStorage));
+                        }
+                        if (null !== $stagingConfig) {
+                            $promoter = $stagingConfig->getArgument(2);
+                            \assert(\is_string($promoter));
+                            $services[PromoterInterface::class][$promoter] = $this->service($container, $promoter, PromoterInterface::class, $context);
+                        }
+                        if (!$field->checksum && !TypedArray::bool($storages[$uploadStorage], 'conditional_put')) {
+                            throw new InvalidArgumentException(\sprintf('%s: storage "%s" has "conditional_put" disabled, which requires "checksum: true".', $context, $uploadStorage));
+                        }
+
+                        $maxSize = $this->maxSize($defaults, $property, $context);
+                    }
+                    if (null !== $field->security) {
+                        $this->checkSecurity($container, $field, $context);
+                    }
 
                     $mappings[$field->name] = new Definition(UploadMapping::class, [
                         $field->name,
@@ -110,6 +118,8 @@ final class MappingPass implements CompilerPassInterface
                         $field->deleteOnRemove,
                         $field->deleteOnReplace,
                         $maxSize,
+                        $field->uploads,
+                        $field->security,
                     ]);
                 }
             }
@@ -120,6 +130,19 @@ final class MappingPass implements CompilerPassInterface
         $container->getDefinition('vadage_presigned_uploader.upload_manager')
             ->replaceArgument(6, new ServiceLocatorArgument($services[NamerInterface::class] ?? []))
             ->replaceArgument(7, new ServiceLocatorArgument($services[PromoterInterface::class] ?? []));
+    }
+
+    private function checkSecurity(ContainerBuilder $container, UploadableField $field, string $context): void
+    {
+        if (!$field->uploads) {
+            throw new InvalidArgumentException($context.': "security" applies to presigning, which "uploads: false" turns off.');
+        }
+        if (!class_exists(Expression::class)) {
+            throw new LogicException($context.': "security" requires the ExpressionLanguage component, try running "composer require symfony/expression-language".');
+        }
+        if (!$container->has('security.authorization_checker')) {
+            throw new LogicException($context.': "security" requires the SecurityBundle, try running "composer require symfony/security-bundle".');
+        }
     }
 
     /**

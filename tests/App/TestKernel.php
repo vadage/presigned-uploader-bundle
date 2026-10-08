@@ -147,6 +147,7 @@ final class TestKernel extends Kernel
         // Like an application's "App\: resource: ../src/": #[Uploadable] classes are discovered from here.
         $services->load('Vadage\PresignedUploaderBundle\Tests\App\Entity\\', __DIR__.'/Entity');
         $services->set(InMemoryPendingUploadRepository::class);
+        $services->set('security.authorization_checker', ExpressionAuthorizationChecker::class);
         $services->set(DocumentController::class)->public()->tag('controller.service_arguments');
         $services->set(ApiDocumentController::class)->public()->tag('controller.service_arguments');
 

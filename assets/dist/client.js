@@ -27,39 +27,63 @@ export async function upload(file, options) {
     if (options.checksum) {
         descriptor.sha256 = await sha256(file);
     }
-    const presignResponse = await postJson(options.presignUrl, descriptor, options);
-    if (!presignResponse.ok) {
-        throw await serverError(presignResponse, `The upload could not be started (HTTP ${presignResponse.status}).`);
-    }
-    const presign = (await presignResponse.json());
+    const presign = await presignUpload(descriptor, options);
     const status = await put(presign, file, options);
     // 412: a retried PUT whose first response got lost, the object exists already. The server verifies it.
     if ((status < 200 || status >= 300) && status !== 412) {
         throw new UploadError([`The upload failed (HTTP ${status}).`]);
     }
-    if (options.verify ?? true) {
-        await verify(presign.verifyUrl, options);
+    const verifyUrl = presign.verifyUrl;
+    if (typeof options.verify === 'function') {
+        await verify(options.verify, presign.uploadId);
+    }
+    else if ((options.verify ?? true) && verifyUrl !== undefined) {
+        await verify(() => verifyOverHttp(verifyUrl, options), presign.uploadId);
     }
     return presign.uploadId;
 }
+async function presignUpload(descriptor, options) {
+    if (options.presign) {
+        return options.presign(descriptor);
+    }
+    if (options.presignUrl === undefined) {
+        throw new TypeError('Either "presignUrl" or "presign" is required.');
+    }
+    const response = await postJson(options.presignUrl, descriptor, options);
+    if (!response.ok) {
+        throw await serverError(response, `The upload could not be started (HTTP ${response.status}).`);
+    }
+    return (await response.json());
+}
 /**
- * Fails only on a definitive answer: the file was rejected (422), or the upload is unknown (404) or expired (410).
+ * Fails only on a definitive answer: a rejected or expired upload, or an UploadError (e.g. an unknown upload).
  * Anything else (a network error, a server error) leaves the decision to the claim, which verifies again.
  */
-async function verify(url, options) {
-    let response;
+async function verify(verifyFn, uploadId) {
+    let result;
     try {
-        response = await postJson(url, {}, options);
+        result = await verifyFn(uploadId);
     }
     catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
+        if (error instanceof UploadError || (error instanceof DOMException && error.name === 'AbortError')) {
             throw error;
         }
         return;
     }
-    if ([404, 410, 422].includes(response.status)) {
+    if (result.state === 'rejected' || result.state === 'expired') {
+        const messages = result.violations.map((violation) => violation.message);
+        throw messages.length > 0 ? new UploadError(messages, true) : new UploadError(['The uploaded file could not be verified.']);
+    }
+}
+async function verifyOverHttp(url, options) {
+    const response = await postJson(url, {}, options);
+    if (response.status === 404) {
         throw await serverError(response, 'The uploaded file could not be verified.');
     }
+    if (![200, 409, 410, 422].includes(response.status)) {
+        throw new Error(`Verification failed (HTTP ${response.status}).`);
+    }
+    return (await response.json());
 }
 /** Files up to this size are hashed in one go with WebCrypto, larger ones chunk by chunk. */
 const HASH_CHUNK = 8 * 1024 * 1024;

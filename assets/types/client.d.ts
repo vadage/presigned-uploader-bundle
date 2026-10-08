@@ -3,12 +3,15 @@
  * Usable without Stimulus, e.g. from React/Vue components or plain scripts.
  */
 export interface UploadOptions {
-    presignUrl: string;
+    /** Either this or `presign` is required. */
+    presignUrl?: string;
+    /** Presigns through another transport, e.g. GraphQL. Throw an UploadError to report violations or a denial. */
+    presign?: (descriptor: UploadDescriptor) => Promise<PresignedRequest>;
     /**
-     * Verify the upload right after it finished (default), with the URL from the presign response. Claiming the
-     * upload verifies it anyway, verifying early only reports a rejected file before the form is submitted.
+     * Verify the upload right after it finished (default), with the URL from the presign response or with a function.
+     * Claiming the upload verifies it anyway, verifying early only reports a rejected file before the form is submitted.
      */
-    verify?: boolean;
+    verify?: boolean | ((uploadId: string) => Promise<VerifyResult>);
     csrf?: {
         header: string;
         token: string;
@@ -17,6 +20,24 @@ export interface UploadOptions {
     checksum?: boolean;
     signal?: AbortSignal;
     onProgress?: (loaded: number, total: number) => void;
+}
+export interface UploadDescriptor {
+    filename: string;
+    size: number;
+    mimeType: string;
+    sha256?: string;
+}
+export interface PresignedRequest {
+    uploadId: string;
+    method: string;
+    url: string;
+    headers: Record<string, string>;
+    /** Without it, `verify: true` does not verify early. */
+    verifyUrl?: string;
+}
+export interface VerifyResult {
+    state: 'pending' | 'verified' | 'claiming' | 'rejected' | 'expired';
+    violations: Violation[];
 }
 export interface Violation {
     propertyPath: string;

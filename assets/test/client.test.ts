@@ -14,6 +14,7 @@ describe('upload()', () => {
 
     afterEach(() => {
         vi.unstubAllGlobals();
+        vi.restoreAllMocks();
     });
 
     it('presigns, uploads with exactly the returned headers and verifies', async () => {
@@ -94,5 +95,53 @@ describe('upload()', () => {
         controller.abort();
 
         await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    });
+    it('presigns and verifies through functions, e.g. GraphQL mutations', async () => {
+        const fetch = vi.fn();
+        vi.stubGlobal('fetch', fetch);
+        const presign = vi.fn().mockResolvedValue({ uploadId: 'abc.def', method: 'PUT', url: 'https://storage/key', headers: presigned.headers });
+        const verify = vi.fn().mockResolvedValue({ state: 'verified', violations: [] });
+
+        await expect(upload(new File(['hello'], 'a.png', { type: 'image/png' }), { presign, verify, checksum: true })).resolves.toBe('abc.def');
+
+        expect(presign).toHaveBeenCalledWith({ filename: 'a.png', size: 5, mimeType: 'image/png', sha256: 'LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ=' });
+        expect(FakeXhr.instances[0]?.headers).toEqual(presigned.headers);
+        expect(verify).toHaveBeenCalledWith('abc.def');
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('skips verification without a verify function or URL', async () => {
+        const presign = vi.fn().mockResolvedValue({ uploadId: 'abc.def', method: 'PUT', url: 'https://storage/key', headers: {} });
+        vi.stubGlobal('fetch', vi.fn());
+
+        await expect(upload(new File(['hello'], 'a.png'), { presign })).resolves.toBe('abc.def');
+    });
+
+    it('passes on errors of the presign function', async () => {
+        const presign = vi.fn().mockRejectedValue(new UploadError(['The file is too large.'], true));
+
+        await expect(upload(new File(['hello'], 'a.png'), { presign })).rejects.toMatchObject({ messages: ['The file is too large.'] });
+        expect(FakeXhr.instances).toHaveLength(0);
+    });
+
+    it('rejects when the verify function reports a rejected file', async () => {
+        const presign = vi.fn().mockResolvedValue({ uploadId: 'abc.def', method: 'PUT', url: 'https://storage/key', headers: {} });
+        const verify = vi.fn().mockResolvedValue({ state: 'rejected', violations: [{ propertyPath: '', message: 'The mime type of the file is invalid.' }] });
+
+        const error = await upload(new File(['hello'], 'a.png'), { presign, verify }).catch((e: unknown) => e);
+
+        expect((error as UploadError).messages).toEqual(['The mime type of the file is invalid.']);
+        expect((error as UploadError).fromServer).toBe(true);
+    });
+
+    it('keeps the upload when the verify function fails otherwise', async () => {
+        const presign = vi.fn().mockResolvedValue({ uploadId: 'abc.def', method: 'PUT', url: 'https://storage/key', headers: {} });
+        const verify = vi.fn().mockRejectedValue(new Error('Network error'));
+
+        await expect(upload(new File(['hello'], 'a.png'), { presign, verify })).resolves.toBe('abc.def');
+    });
+
+    it('requires a presign URL or function', async () => {
+        await expect(upload(new File(['hello'], 'a.png'), {})).rejects.toBeInstanceOf(TypeError);
     });
 });

@@ -23,7 +23,7 @@ final readonly class PresignedUploadTypeGuesser implements FormTypeGuesserInterf
     {
         $mapping = $this->mappings->find($class, $property);
 
-        return null === $mapping ? null : new TypeGuess(PresignedUploadType::class, ['mapping' => $mapping->name], Guess::VERY_HIGH_CONFIDENCE);
+        return null === $mapping || !$mapping->uploads ? null : new TypeGuess(PresignedUploadType::class, ['mapping' => $mapping->name], Guess::VERY_HIGH_CONFIDENCE);
     }
 
     public function guessRequired(string $class, string $property): ?ValueGuess

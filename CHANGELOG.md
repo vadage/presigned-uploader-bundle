@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- GraphQL mutations `createPresignedUpload` and `verifyPresignedUpload` (API Platform 5), the GraphQL
+  counterparts of the upload endpoints for applications and token-authenticated clients that stay in GraphQL;
+  enabled with `graphql: true`
+- `presign` and `verify` functions in the JavaScript client's `upload()` options, to presign and verify through
+  another transport such as the GraphQL mutations
+- `security` option of `#[UploadableField]`: an expression the authorization checker has to grant before presigning
+- `uploads: false` option of `#[UploadableField]` for properties only the application writes
+- `UploadManager::findOwnedByToken()`
+
 ## [0.1.0] - 2026-10-07
 
 ### Added

@@ -33,14 +33,15 @@ try {
 }
 ```
 
-| Option       | Type                      | Description                                                                                                                                 |
-|--------------|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
-| `presignUrl` | `string`                  | URL of the presign endpoint of the mapping (required)                                                                                       |
-| `verify`     | `boolean`                 | Verify the upload right after it finished, to report a rejected file before the form is submitted. Default `true`; claiming verifies anyway |
-| `csrf`       | `{ header, token }`       | CSRF header and token                                                                                                                       |
-| `checksum`   | `boolean`                 | Compute and send a base64 SHA-256 checksum (large files are hashed in chunks)                                                               |
-| `signal`     | `AbortSignal`             | Aborts the upload; the promise then rejects with a `DOMException` named `AbortError`                                                        |
-| `onProgress` | `(loaded, total) => void` | Upload progress of the `PUT` request                                                                                                        |
+| Option       | Type                                 | Description                                                                                                                                 |
+|--------------|--------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| `presignUrl` | `string`                             | URL of the presign endpoint of the mapping; either this or `presign` is required                                                            |
+| `presign`    | `(descriptor) => Promise`            | Presigns through another transport instead, see [Presigning through GraphQL](#presigning-through-graphql)                                   |
+| `verify`     | `boolean` or `(uploadId) => Promise` | Verify the upload right after it finished, to report a rejected file before the form is submitted. Default `true`; claiming verifies anyway |
+| `csrf`       | `{ header, token }`                  | CSRF header and token                                                                                                                       |
+| `checksum`   | `boolean`                            | Compute and send a base64 SHA-256 checksum (large files are hashed in chunks)                                                               |
+| `signal`     | `AbortSignal`                        | Aborts the upload; the promise then rejects with a `DOMException` named `AbortError`                                                        |
+| `onProgress` | `(loaded, total) => void`            | Upload progress of the `PUT` request                                                                                                        |
 
 `upload()` rejects with an `UploadError` when the server refuses the upload (validation, denial, a rejected
 file) or the transfer fails. `error.messages` holds the reasons; `error.fromServer` is `true` when they come
@@ -58,6 +59,37 @@ response:
 <div data-presign-url="{{ path('vadage_presigned_uploader_presign', {mapping: 'user_avatar'}) }}"
      data-csrf-token="{{ csrf_token('vadage_presigned_uploader') }}"></div>
 ```
+
+### Presigning through GraphQL
+
+With the [GraphQL mutations](api.md#presigning-with-graphql), pass functions instead of URLs. `presign` receives
+`{ filename, size, mimeType, sha256? }` and resolves with `{ uploadId, method, url, headers }`; `verify` receives
+the upload id and resolves with `{ state, violations }`. For example with urql:
+
+```js
+const uploadId = await upload(file, {
+    presign: async (descriptor) => {
+        const result = await client.mutation(CreatePresignedUpload, { input: { mapping: 'document_file', ...descriptor } }).toPromise();
+        if (result.error) {
+            throw new UploadError(result.error.graphQLErrors.map((error) => error.message), true);
+        }
+        return result.data.createPresignedUpload.presignedUpload;
+    },
+    verify: async (uploadId) => {
+        const result = await client.mutation(VerifyPresignedUpload, { input: { uploadId } }).toPromise();
+        if (result.error) {
+            throw new UploadError(result.error.graphQLErrors.map((error) => error.message), true);
+        }
+        return result.data.verifyPresignedUpload.presignedUpload;
+    },
+    onProgress,
+});
+```
+
+Throw an `UploadError` to fail the upload with your messages. A `verify` function fails the upload when it
+resolves with a `rejected` or `expired` state, or throws an `UploadError`; other errors are ignored, as the claim
+verifies again. Without a `verify` function, the upload is verified early only if the presign result has a
+`verifyUrl`.
 
 Then submit the upload id to your application: to an API that writes it with the
 [serializer](api.md), or to your own code that resolves and claims it with

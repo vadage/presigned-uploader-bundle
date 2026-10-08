@@ -70,6 +70,10 @@ vadage_presigned_uploader:
     # Require a CSRF token on the upload endpoints when symfony/security-csrf is installed; disable it for clients that authenticate with tokens instead of cookies
     csrf_protection:      true
 
+    # The createPresignedUpload and verifyPresignedUpload mutations (requires API Platform 5 with GraphQL)
+    graphql:
+        enabled:              false
+
     # Classes with #[Uploadable] that are not discovered automatically (e.g. excluded from service registration)
     mapped_classes:       []
     pending_upload:

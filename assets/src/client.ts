@@ -6,17 +6,41 @@ import { Sha256 } from './sha256.js';
  */
 
 export interface UploadOptions {
-    presignUrl: string;
+    /** Either this or `presign` is required. */
+    presignUrl?: string;
+    /** Presigns through another transport, e.g. GraphQL. Throw an UploadError to report violations or a denial. */
+    presign?: (descriptor: UploadDescriptor) => Promise<PresignedRequest>;
     /**
-     * Verify the upload right after it finished (default), with the URL from the presign response. Claiming the
-     * upload verifies it anyway, verifying early only reports a rejected file before the form is submitted.
+     * Verify the upload right after it finished (default), with the URL from the presign response or with a function.
+     * Claiming the upload verifies it anyway, verifying early only reports a rejected file before the form is submitted.
      */
-    verify?: boolean;
+    verify?: boolean | ((uploadId: string) => Promise<VerifyResult>);
     csrf?: { header: string; token: string };
     /** Send a SHA-256 checksum, required by mappings with checksum: true. */
     checksum?: boolean;
     signal?: AbortSignal;
     onProgress?: (loaded: number, total: number) => void;
+}
+
+export interface UploadDescriptor {
+    filename: string;
+    size: number;
+    mimeType: string;
+    sha256?: string;
+}
+
+export interface PresignedRequest {
+    uploadId: string;
+    method: string;
+    url: string;
+    headers: Record<string, string>;
+    /** Without it, `verify: true` does not verify early. */
+    verifyUrl?: string;
+}
+
+export interface VerifyResult {
+    state: 'pending' | 'verified' | 'claiming' | 'rejected' | 'expired';
+    violations: Violation[];
 }
 
 export interface Violation {
@@ -39,21 +63,12 @@ export class UploadError extends Error {
     }
 }
 
-interface PresignResponse {
-    uploadId: string;
-    method: string;
-    url: string;
-    headers: Record<string, string>;
-    expiresAt: string;
-    verifyUrl: string;
-}
-
 /**
  * Resolves with the upload id to submit with the form. Rejects with an UploadError,
  * or a DOMException named "AbortError" when the signal aborts.
  */
 export async function upload(file: File, options: UploadOptions): Promise<string> {
-    const descriptor: Record<string, string | number> = {
+    const descriptor: UploadDescriptor = {
         filename: file.name,
         size: file.size,
         mimeType: file.type || 'application/octet-stream',
@@ -62,11 +77,7 @@ export async function upload(file: File, options: UploadOptions): Promise<string
         descriptor.sha256 = await sha256(file);
     }
 
-    const presignResponse = await postJson(options.presignUrl, descriptor, options);
-    if (!presignResponse.ok) {
-        throw await serverError(presignResponse, `The upload could not be started (HTTP ${presignResponse.status}).`);
-    }
-    const presign = (await presignResponse.json()) as PresignResponse;
+    const presign = await presignUpload(descriptor, options);
 
     const status = await put(presign, file, options);
     // 412: a retried PUT whose first response got lost, the object exists already. The server verifies it.
@@ -74,31 +85,63 @@ export async function upload(file: File, options: UploadOptions): Promise<string
         throw new UploadError([`The upload failed (HTTP ${status}).`]);
     }
 
-    if (options.verify ?? true) {
-        await verify(presign.verifyUrl, options);
+    const verifyUrl = presign.verifyUrl;
+    if (typeof options.verify === 'function') {
+        await verify(options.verify, presign.uploadId);
+    } else if ((options.verify ?? true) && verifyUrl !== undefined) {
+        await verify(() => verifyOverHttp(verifyUrl, options), presign.uploadId);
     }
 
     return presign.uploadId;
 }
 
+async function presignUpload(descriptor: UploadDescriptor, options: UploadOptions): Promise<PresignedRequest> {
+    if (options.presign) {
+        return options.presign(descriptor);
+    }
+    if (options.presignUrl === undefined) {
+        throw new TypeError('Either "presignUrl" or "presign" is required.');
+    }
+
+    const response = await postJson(options.presignUrl, descriptor, options);
+    if (!response.ok) {
+        throw await serverError(response, `The upload could not be started (HTTP ${response.status}).`);
+    }
+
+    return (await response.json()) as PresignedRequest;
+}
+
 /**
- * Fails only on a definitive answer: the file was rejected (422), or the upload is unknown (404) or expired (410).
+ * Fails only on a definitive answer: a rejected or expired upload, or an UploadError (e.g. an unknown upload).
  * Anything else (a network error, a server error) leaves the decision to the claim, which verifies again.
  */
-async function verify(url: string, options: UploadOptions): Promise<void> {
-    let response: Response;
+async function verify(verifyFn: (uploadId: string) => Promise<VerifyResult>, uploadId: string): Promise<void> {
+    let result: VerifyResult;
     try {
-        response = await postJson(url, {}, options);
+        result = await verifyFn(uploadId);
     } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
+        if (error instanceof UploadError || (error instanceof DOMException && error.name === 'AbortError')) {
             throw error;
         }
         return;
     }
 
-    if ([404, 410, 422].includes(response.status)) {
+    if (result.state === 'rejected' || result.state === 'expired') {
+        const messages = result.violations.map((violation) => violation.message);
+        throw messages.length > 0 ? new UploadError(messages, true) : new UploadError(['The uploaded file could not be verified.']);
+    }
+}
+
+async function verifyOverHttp(url: string, options: UploadOptions): Promise<VerifyResult> {
+    const response = await postJson(url, {}, options);
+    if (response.status === 404) {
         throw await serverError(response, 'The uploaded file could not be verified.');
     }
+    if (![200, 409, 410, 422].includes(response.status)) {
+        throw new Error(`Verification failed (HTTP ${response.status}).`);
+    }
+
+    return (await response.json()) as VerifyResult;
 }
 
 /** Files up to this size are hashed in one go with WebCrypto, larger ones chunk by chunk. */
@@ -139,7 +182,7 @@ function postJson(url: string, body: object, options: UploadOptions): Promise<Re
 /**
  * XMLHttpRequest instead of fetch(): fetch has no upload progress events.
  */
-function put(presign: PresignResponse, file: File, options: UploadOptions): Promise<number> {
+function put(presign: PresignedRequest, file: File, options: UploadOptions): Promise<number> {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         const abort = (): void => xhr.abort();

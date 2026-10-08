@@ -66,6 +66,8 @@ property.
 | `uploadTtl`       | `null`           | Seconds the presigned `PUT` stays valid, `null` inherits `defaults.upload_ttl`. Must be shorter than `defaults.claim_ttl` |
 | `deleteOnRemove`  | `true`           | Delete the object when the owning entity is removed                                                                       |
 | `deleteOnReplace` | `true`           | Delete the previous object when the value is replaced or cleared                                                          |
+| `uploads`         | `true`           | `false` for properties only your application writes: no presigning and no maximum size, objects are still deleted         |
+| `security`        | `null`           | Expression that has to be granted before presigning, see [Security](security.md#authorization)                            |
 
 `deleteOnRemove` and `deleteOnReplace` apply to Doctrine entities; see [Upload lifecycle](upload-lifecycle.md).
 

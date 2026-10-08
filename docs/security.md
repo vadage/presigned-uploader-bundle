@@ -5,10 +5,24 @@ presign endpoint has to let the anonymous applicant through and turn away anonym
 applicant's upload id must not be usable by anyone else, and a script must not be able to fill your bucket
 with thousands of CVs.
 
-## Protecting the endpoints
+## Authorization
 
-The upload endpoints are public unless you protect them. The mapping name is part of the presign URL, so
-`access_control` can decide per mapping:
+Presigning is public unless you restrict it. Declare who may upload with the `security` option, an expression
+like the one of `#[IsGranted]`. It is checked before the file is validated and the
+[`PreSignEvent`](events-and-extension-points.md#presignevent) is dispatched, for the HTTP endpoints and the
+[GraphQL mutations](api.md#presigning-with-graphql) alike:
+
+```php
+#[UploadableField(name: 'user_avatar', storage: 'media', security: "is_granted('ROLE_USER')")]
+```
+
+`is_granted()` also asks your voters. The subject is the `PreSignEvent`, so expressions and voters can look at
+the mapping and the announced file, e.g. `subject.descriptor.size`. A denied upload answers `403`. The option
+requires the SecurityBundle and symfony/expression-language.
+
+### Protecting the endpoints
+
+The mapping name is part of the presign URL, so `access_control` can also decide per mapping:
 
 ```yaml
 # config/packages/security.yaml
@@ -21,8 +35,9 @@ security:
 Anchor the patterns with `$`: `^/uploads/user_avatar` would also match a mapping named `user_avatar_large`.
 The verify endpoint (`/uploads/{uploadId}/verify`) only answers to the owner of the upload.
 
-For rules that depend on more than the URL, deny the upload in a [`PreSignEvent`](events-and-extension-points.md#presignevent)
-listener. It receives the mapping, the announced file and the owner id.
+For quotas or rules that need more than the security component, deny the upload in a
+[`PreSignEvent`](events-and-extension-points.md#presignevent) listener. It receives the mapping, the announced
+file and the owner id.
 
 ## Owners
 
@@ -61,6 +76,17 @@ vadage_presigned_uploader:
 This turns it off for the form widget too. Browsers then still need a CORS preflight to send the JSON body
 cross-site, so the endpoints stay protected as long as your CORS configuration does not allow other origins
 with credentials.
+
+## GraphQL
+
+The [GraphQL mutations](api.md#presigning-with-graphql) do not use CSRF tokens: they are part of your GraphQL
+API, and whoever may call it may presign uploads, subject to the `security` option of the mapping. That suits clients
+that authenticate with tokens. For browsers that authenticate with cookies, your GraphQL endpoint is as exposed
+to CSRF as any of its mutations: make sure it only accepts requests that browsers cannot send cross-site without
+a CORS preflight (e.g. `application/json` bodies).
+
+`access_control` cannot tell the mappings apart on the GraphQL endpoint; use the [`security`](#authorization)
+option.
 
 ## Quotas and rate limits
 

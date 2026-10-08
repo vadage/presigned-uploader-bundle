@@ -8,6 +8,8 @@ use Psr\Clock\ClockInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\ExpressionLanguage\Expression;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\ConstraintViolation;
 use Symfony\Component\Validator\ConstraintViolationList;
@@ -16,6 +18,7 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Vadage\PresignedUploaderBundle\Event\PreSignEvent;
 use Vadage\PresignedUploaderBundle\Event\UploadClaimedEvent;
+use Vadage\PresignedUploaderBundle\Exception\MappingNotFoundException;
 use Vadage\PresignedUploaderBundle\Exception\UploadDeniedException;
 use Vadage\PresignedUploaderBundle\Exception\UploadNotClaimableException;
 use Vadage\PresignedUploaderBundle\Exception\UploadValidationException;
@@ -56,6 +59,7 @@ final readonly class UploadManager
         private int $claimTtl,
         private LoggerInterface $logger = new NullLogger(),
         private ?TranslatorInterface $translator = null,
+        private ?AuthorizationCheckerInterface $authorizationChecker = null,
     ) {
     }
 
@@ -66,6 +70,15 @@ final readonly class UploadManager
     public function presign(string $mappingName, UploadDescriptor $descriptor, string $ownerId): PresignResult
     {
         $mapping = $this->mappings->get($mappingName);
+        if (!$mapping->uploads) {
+            throw new MappingNotFoundException($mappingName);
+        }
+
+        $event = new PreSignEvent($mapping, $descriptor, $ownerId);
+        // Before validation, so only those allowed to upload learn the constraints
+        if (null !== $mapping->security && true !== $this->authorizationChecker?->isGranted(new Expression($mapping->security), $event)) {
+            throw new UploadDeniedException('The upload is not allowed.');
+        }
 
         $violations = $this->validateDescriptor($mapping, $descriptor);
         $violations->addAll($this->validator->validatePropertyValue($mapping->class, $mapping->property, $descriptor, [PresignedFile::PRESIGN_GROUP]));
@@ -73,7 +86,6 @@ final readonly class UploadManager
             throw new UploadValidationException($violations);
         }
 
-        $event = new PreSignEvent($mapping, $descriptor, $ownerId);
         $this->dispatcher->dispatch($event);
         if (null !== $reason = $event->getDenyReason()) {
             throw new UploadDeniedException($reason, $event->getDenyStatusCode(), $event->getDenyHeaders());
@@ -132,6 +144,16 @@ final readonly class UploadManager
     }
 
     /**
+     * The upload of a token, if it belongs to the owner.
+     */
+    public function findOwnedByToken(string $token, string $ownerId): ?PendingUpload
+    {
+        $upload = $this->findByToken($token);
+
+        return $upload?->getOwnerId() === $ownerId ? $upload : null;
+    }
+
+    /**
      * Resolves a token submitted by the client into a StoredObject, without claiming it yet.
      * Verifies the upload first if neither the client nor a storage event did.
      *
@@ -142,8 +164,8 @@ final readonly class UploadManager
      */
     public function resolveClaimable(string $token, ?string $mappingName, string $ownerId): StoredObject
     {
-        $upload = $this->findByToken($token);
-        if (null === $upload || null !== $mappingName && $upload->getMapping() !== $mappingName || $upload->getOwnerId() !== $ownerId) {
+        $upload = $this->findOwnedByToken($token, $ownerId);
+        if (null === $upload || null !== $mappingName && $upload->getMapping() !== $mappingName) {
             throw new UploadNotClaimableException('The upload does not exist.');
         }
         if ($upload->getExpiresAt() <= $this->clock->now()) {

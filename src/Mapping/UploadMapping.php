@@ -27,6 +27,8 @@ final readonly class UploadMapping
         public bool $deleteOnReplace,
         /** Largest accepted upload in bytes, on top of the "presign" constraints; null when only those limit it. */
         public ?int $maxSize = null,
+        public bool $uploads = true,
+        public ?string $security = null,
     ) {
     }
 }

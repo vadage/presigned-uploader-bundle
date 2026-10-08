@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Vadage\PresignedUploaderBundle;
 
+use ApiPlatform\GraphQl\Type\TypeConverterInterface;
 use ApiPlatform\Metadata\Property\Factory\PropertyMetadataFactoryInterface;
 use AsyncAws\S3\S3Client;
 use League\Flysystem\FilesystemOperator;
@@ -119,6 +120,10 @@ final class VadagePresignedUploaderBundle extends AbstractBundle
                     ->defaultTrue()
                     ->info('Require a CSRF token on the upload endpoints when symfony/security-csrf is installed; disable it for clients that authenticate with tokens instead of cookies')
                 ->end()
+                ->arrayNode('graphql')
+                    ->info('The createPresignedUpload and verifyPresignedUpload mutations (requires API Platform 5 with GraphQL)')
+                    ->canBeEnabled()
+                ->end()
                 ->arrayNode('mapped_classes')
                     ->info('Classes with #[Uploadable] that are not discovered automatically (e.g. excluded from service registration)')
                     ->scalarPrototype()->end()
@@ -223,6 +228,9 @@ final class VadagePresignedUploaderBundle extends AbstractBundle
         }
         if (interface_exists(PropertyMetadataFactoryInterface::class)) {
             $container->import('../config/api_platform.php');
+        }
+        if (self::graphQlAvailable() && TypedArray::bool(TypedArray::array($config, 'graphql'), 'enabled')) {
+            $container->import('../config/graphql.php');
         }
         if (!TypedArray::bool($config, 'csrf_protection')) {
             $builder->getDefinition(UploadController::class)->replaceArgument(4, null);
@@ -344,6 +352,14 @@ final class VadagePresignedUploaderBundle extends AbstractBundle
 
         // Without named entity managers, the root level is the default one.
         return null !== $first ? $default ?? $first : null;
+    }
+
+    /**
+     * API Platform 5 with GraphQL: the type converter of API Platform 4 has no convertPhpType().
+     */
+    public static function graphQlAvailable(): bool
+    {
+        return interface_exists(TypeConverterInterface::class) && (new \ReflectionClass(TypeConverterInterface::class))->hasMethod('convertPhpType');
     }
 
     private static function webhookAvailable(): bool

@@ -6,7 +6,9 @@ namespace Vadage\PresignedUploaderBundle\Tests\Integration;
 
 use ApiPlatform\GraphQl\Type\TypeConverterInterface;
 use PHPUnit\Framework\Attributes\Group;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpClient\HttpClient;
+use Vadage\PresignedUploaderBundle\Event\PreSignEvent;
 use Vadage\PresignedUploaderBundle\Model\UploadState;
 use Vadage\PresignedUploaderBundle\Tests\App\Entity\Document;
 
@@ -16,7 +18,7 @@ use Vadage\PresignedUploaderBundle\Tests\App\Entity\Document;
 #[Group('integration')]
 final class ApiPlatformTest extends IntegrationTestCase
 {
-    protected static array $kernelOptions = ['doctrine' => true, 'api_platform' => true];
+    protected static array $kernelOptions = ['doctrine' => true, 'api_platform' => true, 'config' => ['graphql' => true]];
 
     private const JSON = ['HTTP_ACCEPT' => 'application/json'];
 
@@ -128,6 +130,112 @@ final class ApiPlatformTest extends IntegrationTestCase
 
         self::assertSame('The upload does not exist.', self::str($data, 'errors', 0, 'message'));
         self::assertSame(0, $this->em()->getRepository(Document::class)->count());
+    }
+
+    public function testGraphQlPresignsVerifiesAndClaimsAnUpload(): void
+    {
+        self::requireGraphQlSupport();
+
+        $data = $this->graphQl(
+            'mutation ($input: createPresignedUploadInput!) { createPresignedUpload(input: $input) { presignedUpload { uploadId state method url headers expiresAt } } }',
+            ['input' => ['mapping' => 'document_file', 'filename' => 'a.txt', 'size' => 7, 'mimeType' => 'text/plain']],
+        );
+        $presign = self::at($data, 'data', 'createPresignedUpload', 'presignedUpload');
+        self::assertIsArray($presign);
+        self::assertSame('pending', self::str($presign, 'state'));
+        self::assertSame('PUT', self::str($presign, 'method'));
+        self::assertIsArray($presign['headers'] ?? null);
+        $headers = [];
+        foreach ($presign['headers'] as $name => $value) {
+            self::assertIsString($name);
+            self::assertIsString($value);
+            $headers[$name] = $value;
+        }
+        self::assertSame('text/plain', $headers['Content-Type'] ?? null);
+        $uploadId = self::str($presign, 'uploadId');
+
+        self::assertSame(200, $this->put(['url' => self::str($presign, 'url'), 'method' => 'PUT', 'headers' => $headers], 'content'));
+
+        $data = $this->graphQl(
+            'mutation ($id: String!) { verifyPresignedUpload(input: {uploadId: $id}) { presignedUpload { uploadId state violations { propertyPath message } } } }',
+            ['id' => $uploadId],
+        );
+        self::assertSame('verified', self::str($data, 'data', 'verifyPresignedUpload', 'presignedUpload', 'state'));
+        self::assertSame([], self::at($data, 'data', 'verifyPresignedUpload', 'presignedUpload', 'violations'));
+
+        $data = $this->graphQl('mutation ($file: String) { createDocument(input: {file: $file}) { document { file { originalName } } } }', ['file' => $uploadId]);
+        self::assertSame('a.txt', self::str($data, 'data', 'createDocument', 'document', 'file', 'originalName'));
+        self::assertNull($this->state($uploadId), 'Claimed');
+    }
+
+    public function testGraphQlVerifyReportsARejectedFile(): void
+    {
+        self::requireGraphQlSupport();
+        $presign = $this->presign('document_file', 'a.txt', self::PNG, 'text/plain');
+        self::assertSame(200, $this->put($presign, self::PNG));
+
+        $data = $this->graphQl(
+            'mutation ($id: String!) { verifyPresignedUpload(input: {uploadId: $id}) { presignedUpload { state violations { propertyPath message } } } }',
+            ['id' => $presign['uploadId']],
+        );
+
+        self::assertSame('rejected', self::str($data, 'data', 'verifyPresignedUpload', 'presignedUpload', 'state'));
+        self::assertNotSame('', self::str($data, 'data', 'verifyPresignedUpload', 'presignedUpload', 'violations', 0, 'message'));
+    }
+
+    public function testGraphQlVerifyOnlyAnswersTheOwner(): void
+    {
+        self::requireGraphQlSupport();
+
+        $data = $this->graphQl('mutation { verifyPresignedUpload(input: {uploadId: "unknown"}) { presignedUpload { state } } }');
+
+        self::assertSame(404, self::at($data, 'errors', 0, 'extensions', 'status'));
+    }
+
+    public function testGraphQlPresignReportsViolations(): void
+    {
+        self::requireGraphQlSupport();
+
+        $data = $this->graphQl('mutation { createPresignedUpload(input: {mapping: "document_file", filename: "a.txt", size: 2000000, mimeType: "text/plain"}) { presignedUpload { uploadId } } }');
+
+        self::assertSame(422, self::at($data, 'errors', 0, 'extensions', 'status'));
+        self::assertStringStartsWith('The file is too large', self::str($data, 'errors', 0, 'extensions', 'violations', 0, 'message'));
+    }
+
+    public function testGraphQlPresignRejectsFractionalSizes(): void
+    {
+        self::requireGraphQlSupport();
+
+        $data = $this->graphQl('mutation { createPresignedUpload(input: {mapping: "document_file", filename: "a.txt", size: 1.5, mimeType: "text/plain"}) { presignedUpload { uploadId } } }');
+
+        self::assertSame(400, self::at($data, 'errors', 0, 'extensions', 'status'));
+    }
+
+    public function testGraphQlPresignReportsUnknownMappingsAndDenials(): void
+    {
+        self::requireGraphQlSupport();
+
+        $data = $this->graphQl('mutation { createPresignedUpload(input: {mapping: "unknown", filename: "a.txt", size: 5, mimeType: "text/plain"}) { presignedUpload { uploadId } } }');
+        self::assertSame(404, self::at($data, 'errors', 0, 'extensions', 'status'));
+
+        self::service(EventDispatcherInterface::class, 'event_dispatcher')->addListener(PreSignEvent::class, static function (PreSignEvent $event): void {
+            $event->deny('Too many uploads, please try again later.', 429);
+        });
+        $data = $this->graphQl('mutation { createPresignedUpload(input: {mapping: "document_file", filename: "a.txt", size: 5, mimeType: "text/plain"}) { presignedUpload { uploadId } } }');
+        self::assertSame(429, self::at($data, 'errors', 0, 'extensions', 'status'));
+        self::assertSame('Too many uploads, please try again later.', self::str($data, 'errors', 0, 'message'));
+    }
+
+    public function testGraphQlResourcesLeaveTheMappingPathsAlone(): void
+    {
+        self::requireGraphQlSupport();
+
+        $directories = self::getContainer()->getParameter('api_platform.resource_class_directories');
+        self::assertIsArray($directories);
+        foreach ($directories as $directory) {
+            self::assertIsString($directory);
+            self::assertStringNotContainsString('ApiPlatform/Resource', $directory);
+        }
     }
 
     private static function requireGraphQlSupport(): void

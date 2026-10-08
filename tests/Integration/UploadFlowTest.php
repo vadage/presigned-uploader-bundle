@@ -44,6 +44,26 @@ final class UploadFlowTest extends IntegrationTestCase
         self::assertSame('Der Dateityp ist ungültig.', self::str($badType, 'violations', 0, 'message'));
     }
 
+    public function testMappingsWithoutUploadsCannotBePresigned(): void
+    {
+        [$status] = $this->postJson('/uploads/document_generated', ['filename' => 'a.txt', 'size' => 5, 'mimeType' => 'text/plain']);
+
+        self::assertSame(404, $status);
+    }
+
+    public function testSecurityIsCheckedBeforePresigning(): void
+    {
+        self::assertSame(201, $this->postJson('/uploads/document_small', ['filename' => 'a.txt', 'size' => 2, 'mimeType' => 'text/plain'])[0]);
+
+        $events = new \ArrayObject();
+        self::service(EventDispatcherInterface::class, 'event_dispatcher')->addListener(PreSignEvent::class, $events->append(...));
+        [$status, $data] = $this->postJson('/uploads/document_small', ['filename' => 'a.txt', 'size' => 5, 'mimeType' => 'text/plain']);
+
+        self::assertSame(403, $status);
+        self::assertSame('The upload is not allowed.', self::str($data, 'message'));
+        self::assertCount(0, $events, 'Denied before the PreSignEvent');
+    }
+
     public function testPreSignListenersCanDenyWithAStatusAndHeaders(): void
     {
         self::service(EventDispatcherInterface::class, 'event_dispatcher')->addListener(PreSignEvent::class, static function (PreSignEvent $event): void {

@@ -62,6 +62,11 @@ rejected file, with the verification violations):
   `collect_denormalization_errors` is enabled;
 - `#[MapRequestPayload]` answers `422` with a violation per property, with the reason in its `hint` parameter.
 
+With an API Platform input DTO (`input: ...`), API Platform replaces the reason with "The input data is
+misformatted.". To report it, declare the property as a string and resolve the upload id in your state processor
+with [`resolveClaimable()`](upload-lifecycle.md#without-doctrine-dtos), e.g. turning `UploadNotClaimableException`
+into a violation.
+
 An upload is presigned for one mapping, and the serializer cannot tell which property it is writing to.
 Claiming checks that the upload is stored in the property of its mapping, and fails the flush
 otherwise. Only a client that mixes up its upload ids gets there; map the exception to a status code if it
@@ -147,8 +152,49 @@ mutation {
 ```
 
 `size` is a `Float`: GraphQL's `Int` has 32 bits, files can be larger than 2 GiB. A `null` file clears the
-property, and errors appear in the response's `errors` like other denormalization errors. Clients upload the
-file through the [HTTP endpoints](javascript-client.md#http-endpoints) before the mutation.
+property, and errors appear in the response's `errors` like other denormalization errors.
+
+#### Presigning with GraphQL
+
+Clients can upload the file through the [HTTP endpoints](javascript-client.md#http-endpoints), or stay in
+GraphQL: the bundle adds two mutations to the schema.
+
+```graphql
+mutation {
+    createPresignedUpload(input: { mapping: "document_file", filename: "contract.pdf", size: 48213, mimeType: "application/pdf" }) {
+        presignedUpload { uploadId method url headers expiresAt }
+    }
+}
+
+mutation {
+    verifyPresignedUpload(input: { uploadId: "2bYkq8N7vX3cTQh1kZp6Rw.Z0FhcXo1..." }) {
+        presignedUpload { state violations { propertyPath message } }
+    }
+}
+```
+
+`createPresignedUpload` takes the same fields as the [presign endpoint](javascript-client.md#presign-post-uploadsmapping)
+plus the name of the mapping (`sha256` for mappings with `checksum: true`). Send the file with `method` to `url`
+with exactly `headers`, then pass `uploadId` to your mutation. Its errors carry the HTTP status in
+`extensions.status`: `422` with `extensions.violations` for an invalid file, the status of a
+[`PreSignEvent`](events-and-extension-points.md#presignevent) denial (e.g. `403`, `429`), and `404` for an unknown
+mapping.
+
+`verifyPresignedUpload` is optional, like the verify endpoint: it reports a rejected file (`state: "rejected"`
+with `violations`) before the upload id is used. Unknown uploads and those of other owners are a `404` error.
+
+The [JavaScript client](javascript-client.md#presigning-through-graphql) can call both mutations, so your
+application keeps the upload with progress and checksums. The mutations have no CSRF token: they are protected
+like the rest of your GraphQL API (see [Security](security.md#graphql)). Restrict who may upload with the
+[`security`](security.md#authorization) option. If your application uses only GraphQL, you do not need to
+import the bundle's routes.
+
+The mutations require API Platform 5 with GraphQL. Like the routes, they are opt-in:
+
+```yaml
+vadage_presigned_uploader:
+    graphql: true
+```
 
 ## Without Doctrine
 

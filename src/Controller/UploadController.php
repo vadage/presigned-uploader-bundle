@@ -81,8 +81,8 @@ final readonly class UploadController
     {
         $this->decode($request);
 
-        $upload = $this->manager->findByToken($uploadId);
-        if (null === $upload || $upload->getOwnerId() !== $this->ownerResolver->resolve()) {
+        $upload = $this->manager->findOwnedByToken($uploadId, $this->ownerResolver->resolve());
+        if (null === $upload) {
             throw new NotFoundHttpException('Upload not found.');
         }
 

@@ -54,6 +54,15 @@ class Document
     #[Groups(['document:read', 'document:write'])]
     public ?StoredObject $archive = null;
 
+    #[UploadableField(name: 'document_generated', storage: 'private', uploads: false)]
+    #[ORM\Column(type: StoredObjectType::NAME, nullable: true)]
+    public ?StoredObject $generated = null;
+
+    #[UploadableField(name: 'document_small', storage: 'private', security: 'subject.descriptor.size < 3')]
+    #[PresignedFile(maxSize: '1M')]
+    #[ORM\Column(type: StoredObjectType::NAME, nullable: true)]
+    public ?StoredObject $small = null;
+
     /** A StoredObject column without #[UploadableField]: uploads cannot be claimed into it. */
     #[ORM\Column(type: StoredObjectType::NAME, nullable: true)]
     public ?StoredObject $copy = null;
