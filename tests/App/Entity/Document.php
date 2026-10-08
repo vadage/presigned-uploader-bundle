@@ -59,9 +59,9 @@ class Document
     #[ORM\Column(type: StoredObjectType::NAME, nullable: true)]
     public ?StoredObject $jar = null;
 
-    #[UploadableField(name: 'document_generated', storage: 'private', uploads: false)]
+    #[UploadableField(name: 'document_rendition', storage: 'private', uploads: false)]
     #[ORM\Column(type: StoredObjectType::NAME, nullable: true)]
-    public ?StoredObject $generated = null;
+    public ?StoredObject $rendition = null;
 
     #[UploadableField(name: 'document_small', storage: 'private', security: 'subject.descriptor.size < 3')]
     #[PresignedFile(maxSize: '1M')]

@@ -77,20 +77,20 @@ final class DoctrineFlowTest extends IntegrationTestCase
 
     public function testObjectsWrittenByTheApplicationAreDeletedWhenReplaced(): void
     {
-        $this->s3()->putObject(['Bucket' => 'test-private', 'Key' => 'generated/1.txt', 'Body' => 'first'])->resolve();
-        $this->s3()->putObject(['Bucket' => 'test-private', 'Key' => 'generated/2.txt', 'Body' => 'second'])->resolve();
+        $this->s3()->putObject(['Bucket' => 'test-private', 'Key' => 'rendition/1.txt', 'Body' => 'first'])->resolve();
+        $this->s3()->putObject(['Bucket' => 'test-private', 'Key' => 'rendition/2.txt', 'Body' => 'second'])->resolve();
         $object = static fn (string $key): StoredObject => new StoredObject('private', $key, 5, 'text/plain', 'a.txt', null, new \DateTimeImmutable());
 
         $document = new Document();
-        $document->generated = $object('generated/1.txt');
+        $document->rendition = $object('rendition/1.txt');
         $this->em()->persist($document);
         $this->em()->flush();
 
-        $document->generated = $object('generated/2.txt');
+        $document->rendition = $object('rendition/2.txt');
         $this->em()->flush();
 
-        self::assertFalse($this->objectExists('test-private', 'generated/1.txt'), 'Replaced object deleted');
-        self::assertTrue($this->objectExists('test-private', 'generated/2.txt'));
+        self::assertFalse($this->objectExists('test-private', 'rendition/1.txt'), 'Replaced object deleted');
+        self::assertTrue($this->objectExists('test-private', 'rendition/2.txt'));
     }
 
     public function testWebhookFindsUploadByLocation(): void

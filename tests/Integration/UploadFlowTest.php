@@ -46,7 +46,7 @@ final class UploadFlowTest extends IntegrationTestCase
 
     public function testMappingsWithoutUploadsCannotBePresigned(): void
     {
-        [$status] = $this->postJson('/uploads/document_generated', ['filename' => 'a.txt', 'size' => 5, 'mimeType' => 'text/plain']);
+        [$status] = $this->postJson('/uploads/document_rendition', ['filename' => 'a.txt', 'size' => 5, 'mimeType' => 'text/plain']);
 
         self::assertSame(404, $status);
     }
