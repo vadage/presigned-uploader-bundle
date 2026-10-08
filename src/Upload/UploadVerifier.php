@@ -35,6 +35,7 @@ use Vadage\PresignedUploaderBundle\Validator\PresignedFile;
 final readonly class UploadVerifier
 {
     private const SNIFF_BYTES = 4096;
+    private const INCONCLUSIVE = 'application/octet-stream';
 
     public function __construct(
         private MappingRegistry $mappings,
@@ -105,7 +106,8 @@ final readonly class UploadVerifier
         // A range request on an empty object fails, and there is nothing to sniff anyway.
         if ($mapping->sniffContent && $upload->getSize() > 0) {
             $sniffed = (new \finfo(\FILEINFO_MIME_TYPE))->buffer($storage->readStart($upload->getKey(), self::SNIFF_BYTES));
-            if (\is_string($sniffed)) {
+            // No magic rule matched: the bytes neither confirm nor contradict the announced type, which stands.
+            if (\is_string($sniffed) && self::INCONCLUSIVE !== $sniffed) {
                 $actual = $actual->withMimeType($sniffed);
             }
         }

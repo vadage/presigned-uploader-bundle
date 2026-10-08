@@ -315,6 +315,36 @@ final class UploadFlowTest extends IntegrationTestCase
         self::assertFalse($this->objectExists('test-quarantine', self::keyOf($presign['url'], 'test-quarantine')));
     }
 
+    public function testJarStartingWithItsManifestIsRecognized(): void
+    {
+        $entry = static function (string $name, string $data): string {
+            $compressed = (string) gzdeflate($data);
+
+            return "PK\x03\x04".pack('vvvvvVVVvv', 20, 0, 8, 0, 0, crc32($data), \strlen($compressed), \strlen($data), \strlen($name), 0).$name.$compressed;
+        };
+        $jar = $entry('META-INF/MANIFEST.MF', "Manifest-Version: 1.0\r\n\r\n");
+        for ($i = 0; $i < 3; ++$i) {
+            $jar .= $entry("a/$i.class", "\xCA\xFE\xBA\xBE".hash('sha512', "class $i", true).hash('sha512', "body $i", true));
+        }
+        $presign = $this->presign('document_jar', 'app.jar', $jar, 'application/java-archive');
+        self::assertSame(200, $this->put($presign, $jar));
+
+        [$status, $data] = $this->verify($presign['uploadId']);
+
+        self::assertSame(200, $status, json_encode($data, \JSON_THROW_ON_ERROR));
+    }
+
+    public function testContentLibmagicCannotIdentifyIsValidatedWithTheAnnouncedType(): void
+    {
+        $content = "\x01";
+        $presign = $this->presign('document_image', 'pixel.png', $content, 'image/png', checksum: true);
+        self::assertSame(200, $this->put($presign, $content));
+
+        [$status, $data] = $this->verify($presign['uploadId']);
+
+        self::assertSame(200, $status, json_encode($data, \JSON_THROW_ON_ERROR));
+    }
+
     /**
      * Storages ignoring the signed headers would let the browser store something other than what was presigned.
      */

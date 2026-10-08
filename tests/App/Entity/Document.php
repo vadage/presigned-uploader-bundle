@@ -54,6 +54,11 @@ class Document
     #[Groups(['document:read', 'document:write'])]
     public ?StoredObject $archive = null;
 
+    #[UploadableField(name: 'document_jar', storage: 'private')]
+    #[PresignedFile(maxSize: '1M', mimeTypes: ['application/java-archive'])]
+    #[ORM\Column(type: StoredObjectType::NAME, nullable: true)]
+    public ?StoredObject $jar = null;
+
     #[UploadableField(name: 'document_generated', storage: 'private', uploads: false)]
     #[ORM\Column(type: StoredObjectType::NAME, nullable: true)]
     public ?StoredObject $generated = null;

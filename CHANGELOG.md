@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `uploads: false` option of `#[UploadableField]` for properties only the application writes
 - `UploadManager::findOwnedByToken()`
 
+### Fixed
+
+- Content sniffing rejected files libmagic cannot identify from their first bytes as `application/octet-stream`,
+  e.g. JARs whose first entry is `META-INF/MANIFEST.MF`; the announced type is validated for them instead
+
 ## [0.1.0] - 2026-10-07
 
 ### Added

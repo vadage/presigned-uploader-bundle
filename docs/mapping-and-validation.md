@@ -112,9 +112,15 @@ Verification reads the first 4 KiB of the stored object and detects its MIME typ
 one of the allowed types, e.g. an HTML file announced as `image/png` is rejected. The detected type does not have
 to equal the announced one: a text file announced as `application/pdf` passes when `text/plain` is allowed too.
 The stored object keeps the announced type (`getMimeType()`), which the storage also serves as `Content-Type`.
-Allow only the types you are prepared to serve. libmagic cannot classify
-very small files (a 1-byte file is `application/octet-stream`); disable sniffing per mapping with
-`sniffContent: false`, or for all mappings with `defaults.sniff_content: false`, if that matters.
+Allow only the types you are prepared to serve.
+
+When libmagic recognizes nothing in those bytes (it reports `application/octet-stream`), the sniff is
+inconclusive and the announced type is validated instead. This happens for very small files, formats libmagic
+does not know, and formats it can only tell apart by the end of the file, e.g. JARs that start with
+`META-INF/MANIFEST.MF`. Content libmagic does recognize, such as HTML, SVG or executables, always has to be
+allowed. Sniffing only looks at the first bytes, so it does not prove a file is valid: anything starting with
+the PNG signature is `image/png`. Disable sniffing per mapping with `sniffContent: false`, or for all mappings
+with `defaults.sniff_content: false`.
 
 ## Reading stored objects
 
