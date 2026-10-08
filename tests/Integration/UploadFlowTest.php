@@ -315,7 +315,7 @@ final class UploadFlowTest extends IntegrationTestCase
         self::assertFalse($this->objectExists('test-quarantine', self::keyOf($presign['url'], 'test-quarantine')));
     }
 
-    public function testJarStartingWithItsManifestIsRecognized(): void
+    public function testJarStartingWithItsManifestIsAccepted(): void
     {
         $entry = static function (string $name, string $data): string {
             $compressed = (string) gzdeflate($data);

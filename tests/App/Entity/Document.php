@@ -55,7 +55,7 @@ class Document
     public ?StoredObject $archive = null;
 
     #[UploadableField(name: 'document_jar', storage: 'private')]
-    #[PresignedFile(maxSize: '1M', mimeTypes: ['application/java-archive'])]
+    #[PresignedFile(maxSize: '1M', mimeTypes: ['application/java-archive', 'application/zip'])]
     #[ORM\Column(type: StoredObjectType::NAME, nullable: true)]
     public ?StoredObject $jar = null;
 

@@ -117,10 +117,11 @@ Allow only the types you are prepared to serve.
 When libmagic recognizes nothing in those bytes (it reports `application/octet-stream`), the sniff is
 inconclusive and the announced type is validated instead. This happens for very small files, formats libmagic
 does not know, and formats it can only tell apart by the end of the file, e.g. JARs that start with
-`META-INF/MANIFEST.MF`. Content libmagic does recognize, such as HTML, SVG or executables, always has to be
-allowed. Sniffing only looks at the first bytes, so it does not prove a file is valid: anything starting with
-the PNG signature is `image/png`. Disable sniffing per mapping with `sniffContent: false`, or for all mappings
-with `defaults.sniff_content: false`.
+`META-INF/MANIFEST.MF` (older libmagic versions report those as `application/zip`, so allow it for JARs).
+Content libmagic does recognize, such as HTML, SVG or executables, always has to be allowed. Sniffing only looks
+at the first bytes, so it does not prove a file is valid: anything starting with the PNG signature is
+`image/png`. Disable sniffing per mapping with `sniffContent: false`, or for all mappings with
+`defaults.sniff_content: false`.
 
 ## Reading stored objects
 
