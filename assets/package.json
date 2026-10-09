@@ -1,7 +1,7 @@
 {
     "name": "@vadage/presigned-uploader-bundle",
     "description": "Stimulus controller for direct-to-storage presigned uploads",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "license": "MIT",
     "type": "module",
     "main": "dist/upload_controller.js",
