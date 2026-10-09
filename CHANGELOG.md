@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Export `package.json` and `dist/upload_controller.js`, which `assets/controllers.json` loaders could not resolve
+  (`The file "@vadage/presigned-uploader-bundle/package.json" could not be found`): Webpack Encore failed the build
+  whenever the package was listed, vite-plugin-symfony once the `upload` controller was enabled
+
 ## [0.2.0] - 2026-10-09
 
 ### Added

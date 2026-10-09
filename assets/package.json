@@ -18,7 +18,12 @@
         "./client.js": {
             "types": "./types/client.d.ts",
             "default": "./dist/client.js"
-        }
+        },
+        "./dist/upload_controller.js": {
+            "types": "./types/upload_controller.d.ts",
+            "default": "./dist/upload_controller.js"
+        },
+        "./package.json": "./package.json"
     },
     "files": [
         "dist",
